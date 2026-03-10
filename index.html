@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Focus Timer">
+<meta name="theme-color" content="#000000">
+<title>Focus Timer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #fff;
+    color: #000;
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    background: #fff;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* ── TASK ROW ── */
+  #task-row {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 2px solid #000;
+    min-height: 76px;
+    flex-shrink: 0;
+  }
+
+  .task-arrow {
+    width: 60px;
+    background: #fff;
+    border: none;
+    font-size: 22px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .task-arrow.prev { border-right: 2px solid #000; }
+  .task-arrow.next { border-left: 2px solid #000; }
+  .task-arrow:active { background: #f0f0f0; }
+
+  #task-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 10px;
+    font-weight: 700;
+    font-size: 18px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    line-height: 1.3;
+    color: #000;
+    word-break: break-word;
+  }
+
+  #task-name.empty { color: #aaa; font-size: 14px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+  /* ── TIMER AREA ── */
+  #timer-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  #phase-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #000;
+    margin-bottom: 8px;
+    display: none;
+  }
+
+  #timer-digits {
+    font-size: clamp(72px, 20vw, 112px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    line-height: 1;
+    color: #000;
+    text-align: center;
+  }
+
+  #mode-label {
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #888;
+    margin-top: 12px;
+  }
+
+  #progress-wrap {
+    width: 100%;
+    max-width: 320px;
+    height: 8px;
+    background: #ddd;
+    margin-top: 20px;
+    display: none;
+  }
+
+  #progress-bar {
+    height: 100%;
+    background: #000;
+    width: 100%;
+    transition: width 0.5s linear;
+  }
+
+  /* ── CONTROLS ── */
+  #controls {
+    display: flex;
+    border-top: 2px solid #000;
+    flex-shrink: 0;
+  }
+
+  .ctrl-btn {
+    border: none;
+    background: #fff;
+    color: #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 22px 8px;
+  }
+
+  .ctrl-btn:active { background: #f0f0f0; }
+
+  #btn-start {
+    flex: 2;
+    background: #000;
+    color: #fff;
+    font-size: 18px;
+    letter-spacing: 2px;
+    border-right: 2px solid #000;
+  }
+
+  #btn-start:active { background: #222; }
+  #btn-reset { flex: 1; font-size: 13px; border-right: 2px solid #000; }
+  #btn-settings { flex: 1; font-size: 13px; }
+
+  /* ── REMINDER OVERLAY ── */
+  #reminder-overlay {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 40px 32px;
+    padding-top: calc(40px + var(--safe-top));
+    padding-bottom: calc(40px + var(--safe-bottom));
+    cursor: pointer;
+  }
+
+  #reminder-overlay.show { display: flex; }
+
+  #reminder-label {
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 28px;
+  }
+
+  #reminder-task {
+    font-size: clamp(40px, 12vw, 72px);
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.15;
+    white-space: pre-line;
+    word-break: break-word;
+    color: #000;
+  }
+
+  #reminder-dismiss {
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: #ccc;
+    margin-top: 48px;
+  }
+
+  /* ── SETTINGS SCREEN ── */
+  #settings-screen {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 2px solid #000;
+    flex-shrink: 0;
+  }
+
+  .settings-title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  .back-btn {
+    padding: 10px 16px;
+    border: 2px solid #000;
+    background: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: pointer;
+  }
+
+  .back-btn:active { background: #f0f0f0; }
+
+  .section-label {
+    padding: 16px 20px 6px;
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    color: #888;
+    text-transform: uppercase;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #ddd;
+    gap: 10px;
+  }
+
+  .settings-row label {
+    flex: 1;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  .num-input {
+    width: 58px;
+    padding: 8px 4px;
+    border: 1px solid #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 16px;
+    text-align: center;
+    background: #fff;
+    color: #000;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
+  .unit { font-size: 13px; color: #888; }
+
+  .seg-control {
+    display: flex;
+    border: 2px solid #000;
+    margin: 0 20px;
+  }
+
+  .seg-btn {
+    flex: 1;
+    padding: 14px 4px;
+    border: none;
+    background: #fff;
+    color: #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    border-right: 2px solid #000;
+  }
+
+  .seg-btn:last-child { border-right: none; }
+  .seg-btn.selected { background: #000; color: #fff; }
+  .seg-btn:active:not(.selected) { background: #f0f0f0; }
+
+  .task-list-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid #ddd;
+    gap: 10px;
+  }
+
+  .task-list-item span {
+    flex: 1;
+    font-weight: 700;
+    font-size: 16px;
+    word-break: break-word;
+  }
+
+  .remove-btn {
+    padding: 6px 12px;
+    border: 1px solid #000;
+    background: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .remove-btn:active { background: #f0f0f0; }
+
+  .add-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 2px solid #000;
+  }
+
+  .task-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #000;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    background: #fff;
+    color: #000;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
+  .task-input::placeholder { color: #aaa; font-weight: 400; }
+
+  .add-btn {
+    padding: 12px 16px;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    cursor: pointer;
+  }
+
+  .add-btn:active { background: #333; }
+
+  .save-btn {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 20px 20px;
+    padding: 22px;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .save-btn:active { background: #333; }
+
+  .hidden { display: none !important; }
+  .invisible { visibility: hidden; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ TIMER SCREEN ══ -->
+  <div id="timer-screen" class="screen active">
+
+    <div id="task-row">
+      <button class="task-arrow prev invisible" id="btn-prev">◀</button>
+      <div id="task-name" class="empty">Tap SET to add a task</div>
+      <button class="task-arrow next invisible" id="btn-next">▶</button>
+    </div>
+
+    <div id="timer-area">
+      <div id="phase-label">FOCUS · SESSION 1</div>
+      <div id="timer-digits">00:00</div>
+      <div id="mode-label">COUNT UP</div>
+      <div id="progress-wrap">
+        <div id="progress-bar"></div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button class="ctrl-btn" id="btn-start">START</button>
+      <button class="ctrl-btn" id="btn-reset">RESET</button>
+      <button class="ctrl-btn" id="btn-settings">SET</button>
+    </div>
+
+  </div>
+
+  <!-- ══ SETTINGS SCREEN ══ -->
+  <div id="settings-screen" class="screen">
+    <div class="settings-header">
+      <span class="settings-title">SETTINGS</span>
+      <button class="back-btn" id="btn-back">BACK</button>
+    </div>
+
+    <div id="settings-body" style="padding-bottom: calc(20px + var(--safe-bottom))">
+
+      <div class="section-label">Task List</div>
+      <div id="task-list-container"></div>
+      <div class="add-row">
+        <input class="task-input" id="new-task-input" type="text" placeholder="Add a task…" maxlength="60">
+        <button class="add-btn" id="btn-add-task">ADD</button>
+      </div>
+
+      <div class="section-label">Timer Mode</div>
+      <div class="seg-control">
+        <button class="seg-btn selected" data-mode="up">COUNT UP</button>
+        <button class="seg-btn" data-mode="down">COUNTDOWN</button>
+        <button class="seg-btn" data-mode="pomodoro">POMODORO</button>
+      </div>
+
+      <div id="countdown-config" class="hidden">
+        <div class="settings-row" style="margin-top:2px">
+          <label>Duration</label>
+          <input class="num-input" id="cd-h" type="number" min="0" max="23" value="0" placeholder="0">
+          <span class="unit">h</span>
+          <input class="num-input" id="cd-m" type="number" min="0" max="59" value="25" placeholder="25">
+          <span class="unit">m</span>
+          <input class="num-input" id="cd-s" type="number" min="0" max="59" value="0" placeholder="0">
+          <span class="unit">s</span>
+        </div>
+      </div>
+
+      <div id="pomodoro-config" class="hidden">
+        <div class="settings-row" style="margin-top:2px">
+          <label>Focus duration</label>
+          <input class="num-input" id="pom-focus" type="number" min="1" max="120" value="25">
+          <span class="unit">min</span>
+        </div>
+        <div class="settings-row">
+          <label>Break duration</label>
+          <input class="num-input" id="pom-break" type="number" min="1" max="60" value="5">
+          <span class="unit">min</span>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top:8px">Task Reminders</div>
+      <div class="settings-row">
+        <label>Remind every</label>
+        <input class="num-input" id="rem-interval" type="number" min="1" max="120" value="3">
+        <span class="unit">min</span>
+      </div>
+      <div class="settings-row" style="border-bottom: 2px solid #000">
+        <label>Show for</label>
+        <input class="num-input" id="rem-duration" type="number" min="2" max="30" value="4">
+        <span class="unit">sec</span>
+      </div>
+
+      <button class="save-btn" id="btn-save">SAVE &amp; RETURN</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── REMINDER OVERLAY ── -->
+<div id="reminder-overlay">
+  <div id="reminder-label">CURRENT TASK</div>
+  <div id="reminder-task"></div>
+  <div id="reminder-dismiss">Tap to dismiss</div>
+</div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────
+const S = {
+  mode: 'up',
+  taskList: [],
+  activeTask: 0,
+  countdownTotal: 1500,
+  pomodoroFocusMin: 25,
+  pomodoroBreakMin: 5,
+  reminderIntervalMin: 3,
+  reminderDurationSec: 4,
+
+  isRunning: false,
+  elapsed: 0,
+  remaining: 0,
+  pomSession: 1,
+  pomPhase: 'focus',
+  lastReminderAt: 0,
+};
+
+let tickInterval = null;
+let reminderTimeout = null;
+
+// ── PERSISTENCE ──────────────────────────────────────────
+function saveAll() {
+  try {
+    localStorage.setItem('ft', JSON.stringify({
+      mode: S.mode, taskList: S.taskList,
+      countdownTotal: S.countdownTotal,
+      pomodoroFocusMin: S.pomodoroFocusMin,
+      pomodoroBreakMin: S.pomodoroBreakMin,
+      reminderIntervalMin: S.reminderIntervalMin,
+      reminderDurationSec: S.reminderDurationSec,
+    }));
+  } catch(e) {}
+}
+
+function loadAll() {
+  try {
+    const d = JSON.parse(localStorage.getItem('ft') || '{}');
+    if (d.mode)               S.mode = d.mode;
+    if (d.taskList)           S.taskList = d.taskList;
+    if (d.countdownTotal)     S.countdownTotal = d.countdownTotal;
+    if (d.pomodoroFocusMin)   S.pomodoroFocusMin = d.pomodoroFocusMin;
+    if (d.pomodoroBreakMin)   S.pomodoroBreakMin = d.pomodoroBreakMin;
+    if (d.reminderIntervalMin) S.reminderIntervalMin = d.reminderIntervalMin;
+    if (d.reminderDurationSec) S.reminderDurationSec = d.reminderDurationSec;
+  } catch(e) {}
+  S.remaining = S.mode === 'down' ? S.countdownTotal
+              : S.mode === 'pomodoro' ? S.pomodoroFocusMin * 60 : 0;
+}
+
+// ── UTILS ────────────────────────────────────────────────
+function fmt(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  const p = n => String(n).padStart(2,'0');
+  return h > 0 ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+}
+
+function activeTask() { return S.taskList[S.activeTask] || ''; }
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880; osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.7);
+  } catch(e) {}
+}
+
+// ── DISPLAY ──────────────────────────────────────────────
+function updateDisplay() {
+  const secs = S.mode === 'up' ? S.elapsed : S.remaining;
+  document.getElementById('timer-digits').textContent = fmt(secs);
+
+  // Mode label
+  const modeLabels = {
+    up: 'COUNT UP', down: 'COUNTDOWN',
+    pomodoro: S.pomPhase === 'focus' ? 'POMODORO · FOCUS' : 'POMODORO · BREAK'
+  };
+  document.getElementById('mode-label').textContent = modeLabels[S.mode];
+
+  // Task header
+  const tn = document.getElementById('task-name');
+  const task = activeTask();
+  if (task) {
+    tn.textContent = task;
+    tn.className = '';
+  } else {
+    tn.textContent = 'Tap SET to add a task';
+    tn.className = 'empty';
+  }
+
+  // Arrows
+  const multi = S.taskList.length > 1;
+  document.getElementById('btn-prev').className = `task-arrow prev ${multi ? '' : 'invisible'}`;
+  document.getElementById('btn-next').className = `task-arrow next ${multi ? '' : 'invisible'}`;
+
+  // Phase label (pomodoro)
+  const pl = document.getElementById('phase-label');
+  if (S.mode === 'pomodoro') {
+    pl.style.display = 'block';
+    pl.textContent = S.pomPhase === 'focus'
+      ? `FOCUS · SESSION ${S.pomSession}`
+      : `BREAK · SESSION ${S.pomSession}`;
+  } else {
+    pl.style.display = 'none';
+  }
+
+  // Progress bar
+  const pw = document.getElementById('progress-wrap');
+  const pb = document.getElementById('progress-bar');
+  if (S.mode === 'down' || S.mode === 'pomodoro') {
+    pw.style.display = 'block';
+    const total = S.mode === 'pomodoro'
+      ? (S.pomPhase === 'focus' ? S.pomodoroFocusMin * 60 : S.pomodoroBreakMin * 60)
+      : S.countdownTotal;
+    const pct = total > 0 ? (S.remaining / total) * 100 : 0;
+    pb.style.width = pct + '%';
+  } else {
+    pw.style.display = 'none';
+  }
+
+  // Start button
+  document.getElementById('btn-start').textContent = S.isRunning ? 'PAUSE' : 'START';
+}
+
+// ── TIMER ────────────────────────────────────────────────
+function startTimer() {
+  if (S.mode === 'down' && S.remaining <= 0) S.remaining = S.countdownTotal;
+  if (S.mode === 'pomodoro' && S.remaining <= 0) S.remaining = S.pomodoroFocusMin * 60;
+  S.isRunning = true;
+  updateDisplay();
+  tickInterval = setInterval(tick, 5000);
+}
+
+function pauseTimer() {
+  S.isRunning = false;
+  clearInterval(tickInterval);
+  updateDisplay();
+}
+
+function resetTimer() {
+  pauseTimer();
+  S.elapsed = 0;
+  S.lastReminderAt = 0;
+  dismissReminder();
+  if (S.mode === 'down') S.remaining = S.countdownTotal;
+  else if (S.mode === 'pomodoro') {
+    S.pomSession = 1; S.pomPhase = 'focus';
+    S.remaining = S.pomodoroFocusMin * 60;
+  } else S.remaining = 0;
+  updateDisplay();
+}
+
+function tick() {
+  if (S.mode === 'up') {
+    S.elapsed += 5;
+    updateDisplay();
+    checkReminder();
+  } else if (S.mode === 'down') {
+    S.remaining = Math.max(0, S.remaining - 5);
+    updateDisplay();
+    if (S.remaining === 0) {
+      pauseTimer();
+      fireReminder("TIME'S UP!");
+    }
+  } else if (S.mode === 'pomodoro') {
+    tickPomodoro();
+  }
+}
+
+function tickPomodoro() {
+  S.remaining = Math.max(0, S.remaining - 5);
+  updateDisplay();
+  if (S.remaining === 0) {
+    if (S.pomPhase === 'focus') {
+      S.pomPhase = 'break';
+      S.remaining = S.pomodoroBreakMin * 60;
+      fireReminder(`BREAK TIME\nSession ${S.pomSession} done`);
+    } else {
+      S.pomSession++;
+      S.pomPhase = 'focus';
+      S.remaining = S.pomodoroFocusMin * 60;
+      const t = activeTask();
+      fireReminder(`SESSION ${S.pomSession}\n${t || 'FOCUS'}`);
+    }
+    updateDisplay();
+  } else if (S.pomPhase === 'focus') {
+    checkReminder();
+  }
+}
+
+function checkReminder() {
+  const task = activeTask();
+  if (!task) return;
+  const intervalSecs = S.reminderIntervalMin * 60;
+  const current = S.mode === 'up' ? S.elapsed
+    : S.mode === 'pomodoro' ? (S.pomodoroFocusMin * 60) - S.remaining
+    : S.countdownTotal - S.remaining;
+  if (current > 0 && (current - S.lastReminderAt) >= intervalSecs) {
+    S.lastReminderAt = current;
+    fireReminder(task);
+  }
+}
+
+// ── REMINDER ─────────────────────────────────────────────
+function fireReminder(text) {
+  playBeep();
+  document.getElementById('reminder-task').textContent = text;
+  document.getElementById('reminder-overlay').classList.add('show');
+  clearTimeout(reminderTimeout);
+  reminderTimeout = setTimeout(dismissReminder, S.reminderDurationSec * 1000);
+}
+
+function dismissReminder() {
+  document.getElementById('reminder-overlay').classList.remove('show');
+  clearTimeout(reminderTimeout);
+}
+
+// ── SETTINGS ─────────────────────────────────────────────
+let settingsTaskList = [];
+let settingsMode = 'up';
+
+function openSettings() {
+  settingsTaskList = [...S.taskList];
+  settingsMode = S.mode;
+
+  renderTaskList();
+  updateSegButtons();
+
+  const total = S.countdownTotal;
+  document.getElementById('cd-h').value = Math.floor(total / 3600);
+  document.getElementById('cd-m').value = Math.floor((total % 3600) / 60);
+  document.getElementById('cd-s').value = total % 60;
+  document.getElementById('pom-focus').value = S.pomodoroFocusMin;
+  document.getElementById('pom-break').value = S.pomodoroBreakMin;
+  document.getElementById('rem-interval').value = S.reminderIntervalMin;
+  document.getElementById('rem-duration').value = S.reminderDurationSec;
+
+  document.getElementById('new-task-input').value = '';
+  document.getElementById('timer-screen').classList.remove('active');
+  document.getElementById('settings-screen').classList.add('active');
+  document.getElementById('settings-body').scrollTop = 0;
+}
+
+function closeSettings() {
+  document.getElementById('settings-screen').classList.remove('active');
+  document.getElementById('timer-screen').classList.add('active');
+}
+
+function saveSettings() {
+  // Grab any unsaved task in input
+  const unsaved = document.getElementById('new-task-input').value.trim();
+  if (unsaved) settingsTaskList.push(unsaved);
+
+  const cdH = parseInt(document.getElementById('cd-h').value) || 0;
+  const cdM = parseInt(document.getElementById('cd-m').value) || 0;
+  const cdS = parseInt(document.getElementById('cd-s').value) || 0;
+
+  S.taskList = settingsTaskList;
+  S.mode = settingsMode;
+  S.countdownTotal = Math.max(5, cdH * 3600 + cdM * 60 + cdS);
+  S.pomodoroFocusMin = Math.max(1, parseInt(document.getElementById('pom-focus').value) || 25);
+  S.pomodoroBreakMin = Math.max(1, parseInt(document.getElementById('pom-break').value) || 5);
+  S.reminderIntervalMin = Math.max(1, parseInt(document.getElementById('rem-interval').value) || 3);
+  S.reminderDurationSec = Math.max(2, parseInt(document.getElementById('rem-duration').value) || 4);
+  S.activeTask = 0;
+
+  saveAll();
+  resetTimer();
+  closeSettings();
+}
+
+function renderTaskList() {
+  const container = document.getElementById('task-list-container');
+  container.innerHTML = '';
+  if (settingsTaskList.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:12px 20px;color:#aaa;font-size:14px;border-bottom:1px solid #ddd';
+    empty.textContent = 'No tasks yet';
+    container.appendChild(empty);
+    return;
+  }
+  settingsTaskList.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'task-list-item';
+    row.innerHTML = `<span>· ${t}</span><button class="remove-btn">✕</button>`;
+    row.querySelector('.remove-btn').addEventListener('click', () => {
+      settingsTaskList.splice(i, 1);
+      renderTaskList();
+    });
+    container.appendChild(row);
+  });
+}
+
+function addTask() {
+  const input = document.getElementById('new-task-input');
+  const t = input.value.trim();
+  if (!t) return;
+  settingsTaskList.push(t);
+  input.value = '';
+  input.blur();
+  renderTaskList();
+}
+
+function updateSegButtons() {
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    const m = btn.dataset.mode;
+    btn.classList.toggle('selected', m === settingsMode);
+  });
+  document.getElementById('countdown-config').classList.toggle('hidden', settingsMode !== 'down');
+  document.getElementById('pomodoro-config').classList.toggle('hidden', settingsMode !== 'pomodoro');
+}
+
+// ── EVENT LISTENERS ───────────────────────────────────────
+document.getElementById('btn-start').addEventListener('click', () => {
+  S.isRunning ? pauseTimer() : startTimer();
+});
+document.getElementById('btn-reset').addEventListener('click', resetTimer);
+document.getElementById('btn-settings').addEventListener('click', openSettings);
+document.getElementById('btn-back').addEventListener('click', closeSettings);
+document.getElementById('btn-save').addEventListener('click', saveSettings);
+document.getElementById('btn-add-task').addEventListener('click', addTask);
+document.getElementById('new-task-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { addTask(); e.target.blur(); }
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (S.taskList.length <= 1) return;
+  S.activeTask = (S.activeTask - 1 + S.taskList.length) % S.taskList.length;
+  S.lastReminderAt = 0;
+  updateDisplay();
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (S.taskList.length <= 1) return;
+  S.activeTask = (S.activeTask + 1) % S.taskList.length;
+  S.lastReminderAt = 0;
+  updateDisplay();
+});
+
+document.getElementById('reminder-overlay').addEventListener('click', dismissReminder);
+
+document.querySelectorAll('.seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settingsMode = btn.dataset.mode;
+    updateSegButtons();
+  });
+});
+
+// ── INIT ──────────────────────────────────────────────────
+loadAll();
+updateDisplay();
+
+// Service worker for offline support
+if ('serviceWorker' in navigator) {
+  const sw = `
+    const C = 'ft-v1';
+    self.addEventListener('install', e => { self.skipWaiting(); });
+    self.addEventListener('activate', e => { self.clients.claim(); });
+    self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))); });
+  `;
+  const blob = new Blob([sw], { type: 'application/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+}
+</script>
+</body>
+</html>
